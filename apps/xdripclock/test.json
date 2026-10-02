@@ -1,0 +1,78 @@
+{
+  "app": "xdripclock",
+  "setup": [{
+    "id": "cached",
+    "steps": [
+      {"t": "cmd", "js": "global.xdripHTTP=[];global.xdripBuzz=0;Bangle.http=function(url){xdripHTTP.push(url);return Promise.reject('offline');};Bangle.buzz=function(){xdripBuzz++;return Promise.resolve();};Bangle.setLocked(false);"},
+      {"t": "cmd", "js": "var now=Date.now();require('Storage').writeJSON('xdripclock.json',{version:1,bg:[[now,130]],latest:[now,130],treatments:[],lastTreatment:0,thresholds:[70,180],thresholdTime:now,units:'mmol',lastAttempt:now-60000});"}
+    ]
+  }],
+  "tests": [
+    {
+      "description": "Boot renders cached glucose using actual firmware graphics without a fresh-data request",
+      "steps": [
+        {"t": "setup", "id": "cached"},
+        {"t": "wrap", "fn": "g.drawString", "id": "readout"},
+        {"t": "cmd", "js": "eval(require('Storage').read('xdripclock.app.js'));"},
+        {"t": "assert", "js": "Bangle.CLOCK", "is": "truthy"},
+        {"t": "assertCall", "id": "readout", "argAsserts": [{"t": "assert", "arg": "0", "is": "equal", "to": "'7.2'"}]},
+        {"t": "assert", "js": "xdripHTTP.length", "is": "equal", "to": 0},
+        {"t": "cmd", "js": "Bangle.setUI();"}
+      ]
+    },
+    {
+      "description": "Manual offline refresh has two vibrations, no dependent requests and a persistent throttle",
+      "steps": [
+        {"t": "setup", "id": "cached"},
+        {"t": "cmd", "js": "eval(require('Storage').read('xdripclock.app.js'));Bangle.emit('touch',1,{type:2,x:88,y:88});"},
+        {"t": "assert", "js": "xdripHTTP.length", "is": "equal", "to": 1},
+        {"t": "assert", "js": "xdripBuzz", "is": "equal", "to": 2},
+        {"t": "cmd", "js": "Bangle.emit('touch',1,{type:2,x:88,y:88});"},
+        {"t": "assert", "js": "xdripHTTP.length", "is": "equal", "to": 1},
+        {"t": "cmd", "js": "Bangle.setUI();eval(require('Storage').read('xdripclock.app.js'));Bangle.emit('touch',1,{type:2,x:88,y:88});"},
+        {"t": "assert", "js": "xdripHTTP.length", "is": "equal", "to": 1},
+        {"t": "cmd", "js": "Bangle.setUI();"}
+      ]
+    },
+    {
+      "description": "Locked face still redraws each minute but ignores manual gestures",
+      "steps": [
+        {"t": "setup", "id": "cached"},
+        {"t": "cmd", "js": "eval(require('Storage').read('xdripclock.app.js'));Bangle.setLocked(true);"},
+        {"t": "wrap", "fn": "g.drawString", "id": "minute"},
+        {"t": "cmd", "js": "Bangle.emit('touch',1,{type:2,x:88,y:88});"},
+        {"t": "advanceTimers", "ms": 60000},
+        {"t": "assertCall", "id": "minute", "count": 1},
+        {"t": "assert", "js": "xdripHTTP.length", "is": "equal", "to": 0},
+        {"t": "cmd", "js": "Bangle.setUI();"}
+      ]
+    },
+    {
+      "description": "Successful full-size endpoint responses normalize and draw on real firmware",
+      "steps": [
+        {"t": "setup", "id": "cached"},
+        {"t": "cmd", "js": "Bangle.http=function(url){xdripHTTP.push(url);var now=Date.now(),data;if(url.indexOf('sgv.json')>=0){data=[];for(var i=0;i<26;i++)data.push({date:now-i*300000,sgv:180-i*3});data[0].units_hint='mgdl';}else if(url.indexOf('treatments.json')>=0){data=[];for(var i=0;i<100;i++)data.push({_id:'fixture-'+i,created_at:now-i*60000,insulin:6,carbs:0,notes:i%2?'Priming pen':null});}else data={settings:{thresholds:{bgLow:80,bgHigh:170}}};return Promise.resolve({resp:JSON.stringify(data)});};"},
+        {"t": "wrap", "fn": "g.drawPoly", "id": "injection"},
+        {"t": "wrap", "fn": "g.drawString", "id": "value"},
+        {"t": "cmd", "js": "eval(require('Storage').read('xdripclock.app.js'));Bangle.emit('touch',1,{type:2,x:88,y:88});"},
+        {"t": "assert", "js": "xdripHTTP.length", "is": "equal", "to": 3},
+        {"t": "assert", "js": "xdripBuzz", "is": "equal", "to": 2},
+        {"t": "assert", "js": "require('Storage').readJSON('xdripclock.json').treatments.length", "is": "equal", "to": 50},
+        {"t": "assert", "js": "require('Storage').readJSON('xdripclock.json').thresholds[0]", "is": "equal", "to": 80},
+        {"t": "assert", "js": "APPTESTS.funcCalls.injection>0", "is": "true"},
+        {"t": "assertCall", "id": "value", "argAsserts": [{"t": "assert", "arg": "0", "is": "equal", "to": "'180'"}]},
+        {"t": "cmd", "js": "Bangle.setUI();"}
+      ]
+    },
+    {
+      "description": "Repeated clean app switches do not leak app memory",
+      "steps": [
+        {"t": "setup", "id": "cached"},
+        {"t": "cmd", "js": "eval(require('Storage').read('xdripclock.app.js'));Bangle.setUI();"},
+        {"t": "saveMemoryUsage"},
+        {"t": "cmd", "js": "eval(require('Storage').read('xdripclock.app.js'));Bangle.setUI();"},
+        {"t": "checkMemoryUsage"}
+      ]
+    }
+  ]
+}

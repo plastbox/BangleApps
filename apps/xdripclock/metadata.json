@@ -1,0 +1,18 @@
+{
+  "id": "xdripclock",
+  "name": "xDrip Glucose",
+  "version": "0.01",
+  "author": "plastbox",
+  "description": "A foreground glucose graph watchface using xDrip's local web service through Bangle.js Gadgetbridge.",
+  "icon": "app.png",
+  "type": "clock",
+  "tags": "clock,health,glucose,gadgetbridge",
+  "supports": ["BANGLEJS2"],
+  "dependencies": {"android": "app"},
+  "readme": "README.md",
+  "storage": [
+    {"name": "xdripclock.app.js", "url": "app.js"},
+    {"name": "xdripclock.img", "url": "app-icon.js", "evaluate": true}
+  ],
+  "data": [{"name": "xdripclock.json"}]
+}
